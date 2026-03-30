@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Text Selector</title>
+  <style>
+    :root {
+      --bg: #fffdf8;
+      --border: #d8d0c4;
+      --text: #222222;
+      --muted: #6e675f;
+      --accent: #b45f06;
+      --danger: #b42318;
+      --star: #1d4ed8;
+      --panel: #fffaf0;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      --radius: 14px;
+      --font: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: transparent;
+      font-family: var(--font);
+      color: var(--text);
+    }
+
+    #app {
+      position: relative;
+      padding: 0;
+    }
+
+    #content {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: linear-gradient(180deg, #fffef9 0%, #fff9ee 100%);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 18px 24px;
+      line-height: 1.75;
+      font-size: 15px;
+      min-height: 320px;
+      box-sizing: border-box;
+      user-select: text;
+    }
+
+    #toolbar {
+      position: absolute;
+      display: none;
+      width: 280px;
+      background: rgba(255, 253, 247, 0.98);
+      border: 1px solid rgba(180, 95, 6, 0.18);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      z-index: 9999;
+      backdrop-filter: blur(8px);
+    }
+
+    .toolbar-title {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .selected-preview {
+      font-size: 13px;
+      line-height: 1.5;
+      background: #fff;
+      border: 1px solid #ebe3d5;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      max-height: 84px;
+      overflow: auto;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    button.delete {
+      background: #fef3f2;
+      color: var(--danger);
+    }
+
+    button.star {
+      background: #eff6ff;
+      color: var(--star);
+    }
+
+    button.ghost {
+      background: #f7f2e9;
+      color: #53483f;
+    }
+
+    #editBox {
+      display: none;
+    }
+
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 82px;
+      border-radius: 10px;
+      border: 1px solid #ddd3c4;
+      padding: 10px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="content"></div>
+    <div id="toolbar">
+      <div class="toolbar-title">已选中片段</div>
+      <div id="selectedPreview" class="selected-preview"></div>
+      <div class="action-row" id="defaultActions">
+        <button class="delete" id="deleteBtn">Delete</button>
+        <button class="primary" id="editBtn">Edit</button>
+        <button class="star" id="starBtn">Star</button>
+        <button class="ghost" id="cancelBtn">取消</button>
+      </div>
+      <div id="editBox">
+        <textarea id="replacementInput" placeholder="输入修改后的内容"></textarea>
+        <div class="action-row">
+          <button class="primary" id="confirmEditBtn">确认修改</button>
+          <button class="ghost" id="backBtn">返回</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const content = document.getElementById("content");
+    const toolbar = document.getElementById("toolbar");
+    const selectedPreview = document.getElementById("selectedPreview");
+    const defaultActions = document.getElementById("defaultActions");
+    const editBox = document.getElementById("editBox");
+    const replacementInput = document.getElementById("replacementInput");
+
+    let currentText = "";
+    let currentSelection = null;
+
+    function sendMessage(type, payload = {}) {
+      window.parent.postMessage(
+        { isStreamlitMessage: true, type, ...payload },
+        "*"
+      );
+    }
+
+    function setFrameHeight() {
+      const height = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight,
+        520
+      );
+      sendMessage("streamlit:setFrameHeight", { height });
+    }
+
+    function setComponentValue(value) {
+      sendMessage("streamlit:setComponentValue", { value });
+    }
+
+    function hideToolbar() {
+      toolbar.style.display = "none";
+      editBox.style.display = "none";
+      defaultActions.style.display = "flex";
+      replacementInput.value = "";
+      currentSelection = null;
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function clampToolbarPosition(x, y) {
+      const width = 280;
+      const padding = 12;
+      const maxX = window.innerWidth - width - padding;
+      const maxY = document.documentElement.scrollHeight - toolbar.offsetHeight - padding;
+      return {
+        left: Math.max(padding, Math.min(x, maxX)),
+        top: Math.max(padding, Math.min(y, maxY))
+      };
+    }
+
+    function getSelectionOffsets(root, range) {
+      const preRange = range.cloneRange();
+      preRange.selectNodeContents(root);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      const start = preRange.toString().length;
+      const selectedText = range.toString();
+      return {
+        start,
+        end: start + selectedText.length,
+        selectedText
+      };
+    }
+
+    function buildContext(text, start, end) {
+      const beforeStart = Math.max(0, start - 24);
+      const afterEnd = Math.min(text.length, end + 24);
+      return {
+        context_before: text.slice(beforeStart, start),
+        context_after: text.slice(end, afterEnd)
+      };
+    }
+
+    function showToolbar(selectionData, rect) {
+      currentSelection = selectionData;
+      selectedPreview.innerHTML = escapeHtml(selectionData.selected_text);
+      toolbar.style.display = "block";
+      const toolbarHeight = toolbar.offsetHeight || 220;
+      const contentRect = content.getBoundingClientRect();
+      const preferredLeft = rect.left - contentRect.left;
+      const placeBelowTop = rect.bottom - contentRect.top + 8;
+      const placeAboveTop = rect.top - contentRect.top - toolbarHeight - 8;
+      const fitsBelow = placeBelowTop + toolbarHeight <= content.scrollHeight + 24;
+      const targetTop = fitsBelow ? placeBelowTop : placeAboveTop;
+      const pos = clampToolbarPosition(preferredLeft, targetTop);
+      toolbar.style.left = `${pos.left}px`;
+      toolbar.style.top = `${pos.top}px`;
+      editBox.style.display = "none";
+      defaultActions.style.display = "flex";
+      setFrameHeight();
+    }
+
+    function submitAction(action, replacementText = "") {
+      if (!currentSelection) return;
+      setComponentValue({
+        event_id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        action,
+        selected_text: currentSelection.selected_text,
+        replacement_text: replacementText,
+        start: currentSelection.start,
+        end: currentSelection.end,
+        context_before: currentSelection.context_before,
+        context_after: currentSelection.context_after
+      });
+      hideToolbar();
+      window.getSelection().removeAllRanges();
+    }
+
+    document.getElementById("deleteBtn").addEventListener("click", () => submitAction("delete"));
+    document.getElementById("starBtn").addEventListener("click", () => submitAction("star"));
+    document.getElementById("editBtn").addEventListener("click", () => {
+      defaultActions.style.display = "none";
+      editBox.style.display = "block";
+      replacementInput.value = currentSelection ? currentSelection.selected_text : "";
+      replacementInput.focus();
+    });
+    document.getElementById("confirmEditBtn").addEventListener("click", () => {
+      submitAction("edit", replacementInput.value);
+    });
+    document.getElementById("cancelBtn").addEventListener("click", hideToolbar);
+    document.getElementById("backBtn").addEventListener("click", () => {
+      editBox.style.display = "none";
+      defaultActions.style.display = "flex";
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (!toolbar.contains(event.target)) {
+        hideToolbar();
+      }
+    });
+
+    content.addEventListener("mouseup", () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      if (!content.contains(range.commonAncestorContainer)) {
+        return;
+      }
+
+      const offsets = getSelectionOffsets(content, range);
+      if (!offsets.selectedText.trim()) {
+        return;
+      }
+
+      const context = buildContext(currentText, offsets.start, offsets.end);
+      const rect = range.getBoundingClientRect();
+      showToolbar(
+        {
+          selected_text: offsets.selectedText,
+          start: offsets.start,
+          end: offsets.end,
+          ...context
+        },
+        rect
+      );
+    });
+
+    window.addEventListener("message", (event) => {
+      const message = event.data;
+      if (!message || message.type !== "streamlit:render") {
+        return;
+      }
+      const args = message.args || {};
+      currentText = args.text || "";
+      content.textContent = currentText;
+      hideToolbar();
+      setFrameHeight();
+    });
+
+    window.addEventListener("resize", setFrameHeight);
+
+    sendMessage("streamlit:componentReady", { apiVersion: 1 });
+    setFrameHeight();
+  </script>
+</body>
+</html>
