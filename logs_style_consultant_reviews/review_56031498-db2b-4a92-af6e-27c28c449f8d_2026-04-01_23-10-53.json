@@ -1,0 +1,59 @@
+{
+  "review_id": "606594763c",
+  "case_id": "56031498-db2b-4a92-af6e-27c28c449f8d",
+  "review_status": "edited",
+  "reviewer_id": "",
+  "saved_at": "2026-04-01T23:10:53.886201",
+  "source_kind": "saved_log",
+  "source_label": "日志文件 / style_consult_batch_test_2026-03-30_16-56-25_d6a97fd0.json",
+  "task_type": "auto",
+  "instruction_version": "instruction_v0",
+  "master_prompt_version": "prompt_v0",
+  "person_id": "曾秋艳",
+  "question": "这个碎花裙子适合我吗",
+  "log_path": "/Users/weihanshen/Documents/CodexWorkspace/yuns-agent/logs_style_consultant_tester/style_consult_batch_test_2026-03-30_16-56-25_d6a97fd0.json",
+  "raw_output": "【必要的分析】\n这条裙子属于 single_item_fit_check。\n\n- 量感：中  \n- 直曲：偏曲  \n- 动静：偏动  \n- 风格：优雅 + 次偏浪漫\n\n色彩\n- 冷暖：冷暖结合，略偏暖  \n- 明度：高  \n- 彩度：低中  \n\n和你的匹配\n1. 风格匹配：这条裙子的优雅、浪漫感和你本人的主风格是对路的，整体气质方向是适合的。  \n2. 色彩匹配：浅、柔、低中彩度也基本在你能穿的范围内，颜色不算问题。  \n3. 身材匹配：问题主要在版型。它的泡袖、上半身碎花密度偏明显，会放大肩部和上半身存在感；你是倒三角，修正重点是弱化上身，这一点它做得不够好。好在它有开领和收腰，下半身线条也比上半身更轻盈，所以不是完全不能穿。  \n\n最终结论：某些搭配下可以穿\n\n【结论】\n这条裙子你 不是最优选，但可以穿。  \n优点是风格和颜色都挺接近你，问题主要是泡袖和上半身碎花会有点显肩宽，不如选肩部更简洁、上半身更干净的碎花裙更适合你。",
+  "final_output": "【必要的分析】\n这条裙子属于 single_item_fit_check。\n\n- 量感：中偏大（长裙）  \n- 直曲：偏曲  \n- 动静：偏动  \n- 风格：优雅 + 次偏浪漫\n\n色彩\n- 冷暖：冷暖结合，略偏暖  \n- 明度：高  \n- 彩度：中  \n\n和你的匹配\n1. 风格匹配：这条裙子的优雅、浪漫感和你本人的主风格是对路的，整体气质方向是适合的。  \n2. 色彩匹配：浅、柔、低中彩度也基本在你能穿的范围内，颜色不算问题。  \n3. 身材匹配：问题主要在版型。它的泡袖、上半身碎花密度偏明显，会放大肩部和上半身存在感；你是倒三角，修正重点是弱化上身，这一点它做得不够好。好在它有开领和收腰，下半身线条也比上半身更轻盈，所以不是完全不能穿。  \n\n最终结论：某些搭配下可以穿\n\n【结论】\n这条裙子你 不是最优选，但可以穿。  \n优点是风格和颜色都挺接近你，问题主要是泡袖和上半身碎花会有点显肩宽，不如选肩部更简洁、上半身更干净的碎花裙更适合你。",
+  "action_count": 3,
+  "actions": [
+    {
+      "action_id": "dd90276b96",
+      "case_id": "56031498-db2b-4a92-af6e-27c28c449f8d",
+      "op": "edit",
+      "selected_text": "中",
+      "replacement_text": "中偏大（长裙）",
+      "start": 44,
+      "end": 45,
+      "context_before": "e_item_fit_check。\n\n- 量感：",
+      "context_after": "  \n- 直曲：偏曲  \n- 动静：偏动  \n-",
+      "reviewer_id": "",
+      "created_at": "2026-04-01T23:08:18.181918"
+    },
+    {
+      "action_id": "9bdbfccbc1",
+      "case_id": "56031498-db2b-4a92-af6e-27c28c449f8d",
+      "op": "edit",
+      "selected_text": "低中",
+      "replacement_text": "中",
+      "start": 123,
+      "end": 125,
+      "context_before": "暖结合，略偏暖  \n- 明度：高  \n- 彩度：",
+      "context_after": "  \n\n和你的匹配\n1. 风格匹配：这条裙子的优",
+      "reviewer_id": "",
+      "created_at": "2026-04-01T23:09:11.045802"
+    },
+    {
+      "action_id": "cb50ff753a",
+      "case_id": "56031498-db2b-4a92-af6e-27c28c449f8d",
+      "op": "star",
+      "selected_text": "会放大肩部和上半身存在感；你是倒三角，修正重点是弱化上身，这一点它做得不够好",
+      "replacement_text": "",
+      "start": 250,
+      "end": 288,
+      "context_before": "问题主要在版型。它的泡袖、上半身碎花密度偏明显，",
+      "context_after": "。好在它有开领和收腰，下半身线条也比上半身更轻盈",
+      "reviewer_id": "",
+      "created_at": "2026-04-01T23:10:27.897996"
+    }
+  ]
+}

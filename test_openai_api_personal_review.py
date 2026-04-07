@@ -973,6 +973,12 @@ def apply_action_to_text(text: str, action: Dict[str, Any]) -> str:
         return text[:start] + text[end:]
     if op == "edit":
         return text[:start] + replacement_text + text[end:]
+    if op == "add":
+        if not replacement_text.strip():
+            return text
+        insert_text = replacement_text.strip()
+        separator = "\n" if end < len(text) and text[end:end + 1] != "\n" else ""
+        return text[:end] + separator + insert_text + text[end:]
     return text
 
 
@@ -1180,7 +1186,7 @@ if selected_case:
     actions = get_case_actions(selected_case["case_id"])
     review_view = build_review_view(selected_case, actions)
 
-    st.info("直接用鼠标选中说错的话。选中后会浮出操作条：`Delete`、`Edit`、`Star`。")
+    st.info("直接用鼠标选中说错的话。选中后会浮出操作条：`Delete`、`Edit`、`Add`、`Star`。")
 
     selector_event = render_text_selector(
         review_view["current_text"],
@@ -1195,9 +1201,9 @@ if selected_case:
         start = selector_event.get("start", 0)
         end = selector_event.get("end", 0)
 
-        if action_type == "edit" and not replacement_text:
-            st.warning("Edit 操作需要填写修改后的内容。")
-        elif action_type in {"delete", "edit", "star"} and selected_text_value:
+        if action_type in {"edit", "add"} and not replacement_text:
+            st.warning(f"{action_type.title()} 操作需要填写内容。")
+        elif action_type in {"delete", "edit", "add", "star"} and selected_text_value:
             action_record = {
                 "action_id": uuid.uuid4().hex[:10],
                 "case_id": selected_case["case_id"],
@@ -1246,6 +1252,8 @@ if selected_case:
                 "source_kind": selected_case["source_kind"],
                 "source_label": selected_case["source_label"],
                 "task_type": selected_case["task_type"],
+                "instruction_version": selected_case.get("instruction_version"),
+                "master_prompt_version": selected_case.get("master_prompt_version"),
                 "person_id": selected_case["person_id"],
                 "question": selected_case["question"],
                 "log_path": selected_case["log_path"],
@@ -1269,6 +1277,8 @@ if selected_case:
                         "review_id": review_id,
                         "case_id": selected_case["case_id"],
                         "task_type": selected_case["task_type"],
+                        "instruction_version": selected_case.get("instruction_version"),
+                        "master_prompt_version": selected_case.get("master_prompt_version"),
                         "person_id": selected_case["person_id"],
                         **patch,
                     },

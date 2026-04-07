@@ -140,6 +140,7 @@
       <div class="action-row" id="defaultActions">
         <button class="delete" id="deleteBtn">Delete</button>
         <button class="primary" id="editBtn">Edit</button>
+        <button class="primary" id="addBtn">Add</button>
         <button class="star" id="starBtn">Star</button>
         <button class="ghost" id="cancelBtn">取消</button>
       </div>
@@ -163,6 +164,7 @@
 
     let currentText = "";
     let currentSelection = null;
+    let inputMode = "edit";
 
     function sendMessage(type, payload = {}) {
       window.parent.postMessage(
@@ -189,6 +191,8 @@
       editBox.style.display = "none";
       defaultActions.style.display = "flex";
       replacementInput.value = "";
+      replacementInput.placeholder = "输入修改后的内容";
+      inputMode = "edit";
       currentSelection = null;
     }
 
@@ -270,18 +274,33 @@
     document.getElementById("deleteBtn").addEventListener("click", () => submitAction("delete"));
     document.getElementById("starBtn").addEventListener("click", () => submitAction("star"));
     document.getElementById("editBtn").addEventListener("click", () => {
+      inputMode = "edit";
       defaultActions.style.display = "none";
       editBox.style.display = "block";
+      replacementInput.placeholder = "输入修改后的内容";
       replacementInput.value = currentSelection ? currentSelection.selected_text : "";
       replacementInput.focus();
+      setFrameHeight();
+    });
+    document.getElementById("addBtn").addEventListener("click", () => {
+      inputMode = "add";
+      defaultActions.style.display = "none";
+      editBox.style.display = "block";
+      replacementInput.placeholder = "输入要补在这句话后面的内容";
+      replacementInput.value = "";
+      replacementInput.focus();
+      setFrameHeight();
     });
     document.getElementById("confirmEditBtn").addEventListener("click", () => {
-      submitAction("edit", replacementInput.value);
+      submitAction(inputMode, replacementInput.value);
     });
     document.getElementById("cancelBtn").addEventListener("click", hideToolbar);
     document.getElementById("backBtn").addEventListener("click", () => {
       editBox.style.display = "none";
       defaultActions.style.display = "flex";
+      replacementInput.value = "";
+      replacementInput.placeholder = "输入修改后的内容";
+      inputMode = "edit";
     });
 
     document.addEventListener("mousedown", (event) => {

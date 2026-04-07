@@ -1,0 +1,59 @@
+{
+  "review_id": "a8fd6c7292",
+  "case_id": "93c5fba3-ba4f-419f-8f88-601e8d98592a",
+  "review_status": "edited",
+  "reviewer_id": "",
+  "saved_at": "2026-04-02T19:55:51.639504",
+  "source_kind": "saved_log",
+  "source_label": "日志文件 / style_consult_batch_test_2026-03-30_16-41-27_52d940f0.json",
+  "task_type": "auto",
+  "instruction_version": "instruction_v0",
+  "master_prompt_version": "prompt_v0",
+  "person_id": "赵爽",
+  "question": "我能买吗这一身",
+  "log_path": "/Users/weihanshen/Documents/CodexWorkspace/yuns-agent/logs_style_consultant_tester/style_consult_batch_test_2026-03-30_16-41-27_52d940f0.json",
+  "raw_output": "【必要的分析】\n这身更接近 item_match_check / outfit整体适配判断。  \n- 上衣：量感 偏大，直曲 偏曲，动静 偏动；风格更接近 前卫 + 浪漫。姜黄色属 暖，明度 中，彩度 中。颜色方向和你匹配，但泡袖、大翻领、系带收腰、下摆外扩这些细节都会把视觉重点堆在上半身，不利于你“弱化上半身、平衡肩臀”的修正目标。  \n- 下装：量感 中，直曲 偏曲，动静 偏静；更接近 自然 + 优雅。奶油白属 暖，明度 高，彩度 低，色彩上比较适合你，也有把重心往下放的作用。  \n- 整身搭配：暖色系统一，完成度可以；但风格语言不够统一，上衣偏强、偏设计感，下装偏柔和放松。最大问题不是颜色，而是上衣对肩背和上半身太加量，对你不够友好。\n\n【结论】\n不建议整身直接买。 颜色你能穿，但这件上衣会明显放大上半身，和你的体型修正方向是反着来的。  \n如果你很喜欢，裙子比上衣更值得买；上衣建议换成更利落、少褶皱少扩张感的款。",
+  "final_output": "【必要的分析】\n这身更接近 item_match_check / outfit整体适配判断。  \n- 上衣：量感 偏大，直曲 直，动静 偏动；风格更接近 前卫 + 浪漫。姜黄色属 暖，明度 中，彩度 中。颜色方向和你匹配，但泡袖、大翻领、系带收腰、下摆外扩这些细节都会把视觉重点堆在上半身，不利于你“弱化上半身、平衡肩臀”的修正目标。  \n- 下装：量感 中，直曲 偏曲，动静 偏静；更接近 自然 + 优雅。奶油白属 暖，明度 高，彩度 低，色彩上比较适合你，也有把重心往下放的作用。  \n- 整身搭配：暖色系统一，完成度可以；但风格语言不够统一，上衣偏强、偏设计感，下装偏柔和放松。最大问题不是颜色，而是上衣对肩背和上半身太加量，对你不够友好。\n\n【结论】\n颜色你能穿，但这件上衣会明显放大上半身，和你的体型修正方向是反着来的。  \n裙子是很曲的，你是直线型，也不建议买上衣建议换成更利落、少褶皱少扩张感的款。",
+  "action_count": 3,
+  "actions": [
+    {
+      "action_id": "e3b6ed4c03",
+      "case_id": "93c5fba3-ba4f-419f-8f88-601e8d98592a",
+      "op": "edit",
+      "selected_text": "偏曲",
+      "replacement_text": "直",
+      "start": 63,
+      "end": 65,
+      "context_before": "整体适配判断。  \n- 上衣：量感 偏大，直曲 ",
+      "context_after": "，动静 偏动；风格更接近 前卫 + 浪漫。姜黄色",
+      "reviewer_id": "",
+      "created_at": "2026-04-02T19:51:00.615396"
+    },
+    {
+      "action_id": "55f1edd6fc",
+      "case_id": "93c5fba3-ba4f-419f-8f88-601e8d98592a",
+      "op": "edit",
+      "selected_text": "如果你很喜欢，裙子比上衣更值得买；",
+      "replacement_text": "裙子是很曲的，你是直线型，也不建议买",
+      "start": 378,
+      "end": 395,
+      "context_before": "放大上半身，和你的体型修正方向是反着来的。  \n",
+      "context_after": "上衣建议换成更利落、少褶皱少扩张感的款。",
+      "reviewer_id": "",
+      "created_at": "2026-04-02T19:55:18.067485"
+    },
+    {
+      "action_id": "dec2233318",
+      "case_id": "93c5fba3-ba4f-419f-8f88-601e8d98592a",
+      "op": "delete",
+      "selected_text": "不建议整身直接买。 ",
+      "replacement_text": "",
+      "start": 330,
+      "end": 340,
+      "context_before": "肩背和上半身太加量，对你不够友好。\n\n【结论】\n",
+      "context_after": "颜色你能穿，但这件上衣会明显放大上半身，和你的体",
+      "reviewer_id": "",
+      "created_at": "2026-04-02T19:55:40.855482"
+    }
+  ]
+}
