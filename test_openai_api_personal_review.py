@@ -1,5 +1,8 @@
 import base64
+import difflib
+import html
 import json
+import math
 import mimetypes
 import os
 import re
@@ -917,6 +920,7 @@ def load_case_record_from_log(log_path_str: str) -> Dict[str, Any]:
         "question": payload.get("question", ""),
         "person": person,
         "final_prompt": payload.get("final_prompt", ""),
+        "request_instructions": payload.get("request_instructions", ""),
         "raw_output": response.get("output_text_plain") or to_plain_text(response.get("output_text", "") or ""),
         "response": response,
         "log_path": str(path.resolve()),
@@ -1107,56 +1111,697 @@ def render_patch_summary(patch: Dict[str, Any], index: int) -> None:
     )
 
 
-init_session_state()
-
-st.set_page_config(page_title=APP_TITLE, layout="wide")
-st.title(APP_TITLE)
-st.caption("专家审校台。这里只做 review：从已保存日志读取 case，直接对模型输出做局部修订并保存结果。")
-
-with st.sidebar:
-    st.markdown("### 审校设置")
-    st.text_input(
-        "reviewer_id",
-        placeholder="例如：expert_a",
-        key="reviewer_id",
-    )
-
-    st.divider()
-    st.markdown("### 环境状态")
-    st.write(
-        {
-            "logs_dir": str(LOG_DIR.resolve()),
-            "review_logs_dir": str(REVIEW_DIR.resolve()),
-            "saved_case_count": len(list_saved_case_logs(limit=1000)),
+def inject_app_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --page-bg: #f5efe6;
+            --card-bg: #fffdfa;
+            --ink: #231d18;
+            --muted: #70655a;
+            --line: #e6d7c6;
+            --accent: #b65d3f;
+            --accent-soft: #f8e2d6;
+            --good: #2c6b56;
+            --good-soft: #e2f0ea;
+            --warn: #8f5d1f;
+            --warn-soft: #f4e8d3;
         }
+
+        .stApp {
+            background:
+                radial-gradient(circle at top right, rgba(182, 93, 63, 0.09), transparent 28%),
+                radial-gradient(circle at top left, rgba(44, 107, 86, 0.08), transparent 22%),
+                linear-gradient(180deg, #f6f1ea 0%, #f3ece3 100%);
+        }
+
+        .gallery-hero {
+            background: linear-gradient(135deg, rgba(255, 253, 250, 0.96), rgba(247, 239, 230, 0.96));
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 1.25rem 1.35rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 12px 40px rgba(35, 29, 24, 0.06);
+        }
+
+        .gallery-kicker {
+            color: var(--accent);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 0.35rem;
+        }
+
+        .gallery-title {
+            color: var(--ink);
+            font-size: 1.55rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 0.4rem;
+        }
+
+        .gallery-subtitle {
+            color: var(--muted);
+            font-size: 0.98rem;
+            line-height: 1.55;
+        }
+
+        .person-card {
+            background: var(--card-bg);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 1rem 1rem 0.9rem 1rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .person-title {
+            color: var(--ink);
+            font-size: 1.02rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+
+        .person-summary {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.55;
+            margin-bottom: 0.7rem;
+        }
+
+        .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.42rem;
+        }
+
+        .tag-chip {
+            background: #f7efe5;
+            border: 1px solid #ead9c5;
+            border-radius: 999px;
+            color: var(--ink);
+            font-size: 0.76rem;
+            padding: 0.24rem 0.58rem;
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.28rem 0.62rem;
+            margin-left: 0.35rem;
+        }
+
+        .status-edited {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border: 1px solid #edccb9;
+        }
+
+        .status-pass {
+            background: var(--good-soft);
+            color: var(--good);
+            border: 1px solid #cae5d9;
+        }
+
+        .status-other {
+            background: var(--warn-soft);
+            color: var(--warn);
+            border: 1px solid #ead9ba;
+        }
+
+        .compare-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 1rem 1.08rem;
+            min-height: 220px;
+            margin-bottom: 0.9rem;
+        }
+
+        .compare-label {
+            color: var(--ink);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 0.55rem;
+        }
+
+        .compare-text {
+            color: var(--ink);
+            font-size: 0.96rem;
+            line-height: 1.78;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .diff-added {
+            background: rgba(44, 107, 86, 0.18);
+            border-radius: 0.22rem;
+            padding: 0.02rem 0;
+        }
+
+        .diff-removed {
+            background: rgba(182, 93, 63, 0.2);
+            border-radius: 0.22rem;
+            padding: 0.02rem 0;
+        }
+
+        .case-meta {
+            color: var(--muted);
+            font-size: 0.82rem;
+            line-height: 1.6;
+            margin: 0.25rem 0 0.8rem 0;
+        }
+
+        .action-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.22rem 0.52rem;
+            margin: 0 0.38rem 0.38rem 0;
+            font-size: 0.74rem;
+            font-weight: 600;
+            background: #f7efe5;
+            border: 1px solid #ead9c5;
+            color: var(--ink);
+        }
+
+        .delta-board {
+            background: linear-gradient(180deg, rgba(255, 253, 250, 0.98), rgba(248, 241, 232, 0.98));
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 0.95rem 1.05rem;
+            margin: 0.2rem 0 0.95rem 0;
+        }
+
+        .delta-title {
+            color: var(--ink);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 0.65rem;
+        }
+
+        .delta-item {
+            border-top: 1px dashed #e4d4c0;
+            padding: 0.72rem 0 0.1rem 0;
+        }
+
+        .delta-item:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .delta-op {
+            color: var(--accent);
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-bottom: 0.42rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .delta-snippet {
+            color: var(--ink);
+            font-size: 0.9rem;
+            line-height: 1.68;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-bottom: 0.35rem;
+        }
+
+        .delta-before {
+            background: rgba(182, 93, 63, 0.08);
+            border-left: 3px solid rgba(182, 93, 63, 0.55);
+            padding: 0.45rem 0.55rem;
+            border-radius: 0.45rem;
+        }
+
+        .delta-after {
+            background: rgba(44, 107, 86, 0.08);
+            border-left: 3px solid rgba(44, 107, 86, 0.55);
+            padding: 0.45rem 0.55rem;
+            border-radius: 0.45rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-st.subheader("专家审校")
-st.caption("从已保存日志中选择一个 case，然后直接在模型输出里选中错的片段做 Delete / Edit / Star。")
 
-saved_logs = list_saved_case_logs()
-selected_case: Optional[Dict[str, Any]] = None
+def parse_iso_datetime(value: Optional[str]) -> datetime:
+    if not value:
+        return datetime.min
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return datetime.min
 
-if saved_logs:
-    log_options = {path.name: str(path.resolve()) for path in saved_logs}
-    log_labels = list(log_options.keys())
-    if (
-        not st.session_state.review_selected_saved_case
-        or st.session_state.review_selected_saved_case not in log_options
-    ):
-        st.session_state.review_selected_saved_case = log_labels[0]
 
-    st.selectbox(
-        "选择已保存日志",
-        log_labels,
-        index=log_labels.index(st.session_state.review_selected_saved_case),
-        key="review_selected_saved_case",
+def group_images_by_role(images: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    grouped = {"task": [], "reference": [], "other": []}
+    for item in images:
+        source_type = str(item.get("source_type", ""))
+        if source_type.startswith("task_"):
+            grouped["task"].append(item)
+        elif "reference" in source_type:
+            grouped["reference"].append(item)
+        else:
+            grouped["other"].append(item)
+    return grouped
+
+
+def load_review_gallery_records() -> List[Dict[str, Any]]:
+    if not REVIEW_CASES_JSONL.exists():
+        return []
+
+    records: List[Dict[str, Any]] = []
+    with REVIEW_CASES_JSONL.open("r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            review_record = json.loads(line)
+            saved_at = review_record.get("saved_at")
+            actions = review_record.get("actions", []) or []
+            action_types = [str(action.get("op", "") or "") for action in actions]
+
+            records.append(
+                {
+                    **review_record,
+                    "saved_at_dt": parse_iso_datetime(saved_at),
+                    "task_label": TASK_TYPES.get(review_record.get("task_type"), TASK_TYPES["auto"])["label"],
+                    "question_preview": summarize_text(review_record.get("question", ""), limit=52),
+                    "action_types": action_types,
+                    "action_type_counts": {op: action_types.count(op) for op in sorted(set(action_types)) if op},
+                    "source_label": review_record.get("source_label", ""),
+                }
+            )
+
+    records.sort(key=lambda item: item["saved_at_dt"], reverse=True)
+    return records
+
+
+def hydrate_review_gallery_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    log_case: Dict[str, Any] = {}
+    log_path = record.get("log_path")
+    if log_path and Path(log_path).exists():
+        log_case = load_case_record_from_log(log_path)
+
+    all_images = log_case.get("all_images", [])
+    image_groups = group_images_by_role(all_images)
+    return {
+        **record,
+        "person": log_case.get("person") or {},
+        "all_images": all_images,
+        "task_images": image_groups["task"],
+        "reference_images": image_groups["reference"],
+        "other_images": image_groups["other"],
+        "request_instructions": log_case.get("request_instructions", ""),
+        "final_prompt": log_case.get("final_prompt", ""),
+        "source_label": record.get("source_label") or log_case.get("source_label", ""),
+    }
+
+
+def render_status_chip(review_status: str) -> str:
+    status = (review_status or "").strip().lower()
+    label_map = {
+        "edited": "已修改",
+        "pass": "直接通过",
+    }
+    css_class = {
+        "edited": "status-edited",
+        "pass": "status-pass",
+    }.get(status, "status-other")
+    label = label_map.get(status, status or "未标记")
+    return f'<span class="status-chip {css_class}">{html.escape(label)}</span>'
+
+
+def render_person_card(person: Dict[str, Any]) -> None:
+    if not person:
+        st.info("没有补全到人物参数。")
+        return
+
+    summary_parts = [
+        f"{person.get('主风格', '未知')} / {person.get('次风格', '未知')}",
+        f"{person.get('四季色型', '未知')}",
+        f"{person.get('体型', '未知')}",
+    ]
+    tags = [
+        ("面部直曲", person.get("面部直曲")),
+        ("面部量感", person.get("面部量感")),
+        ("面部动静", person.get("面部动静")),
+        ("冷暖", person.get("冷暖")),
+        ("明度", person.get("明度")),
+        ("彩度", person.get("彩度")),
+    ]
+    tag_html = "".join(
+        f'<span class="tag-chip">{html.escape(label)}: {html.escape(str(value))}</span>'
+        for label, value in tags
+        if value
     )
-    selected_case = load_case_record_from_log(log_options[st.session_state.review_selected_saved_case])
-else:
-    st.info("还没有找到已保存的测试日志。请先在 `test_openai_api_personal.py` 里跑测试。")
+    repair_focus = str(person.get("穿搭修正重点", "未提供"))
+    markup = f"""
+    <div class="person-card">
+      <div class="person-title">人物卡 / {html.escape(str(person.get('person_id', '未命名')))}</div>
+      <div class="person-summary">{html.escape(" · ".join(summary_parts))}</div>
+      <div class="tag-row">{tag_html}</div>
+      <div class="person-summary" style="margin-top:0.78rem;"><strong>修正重点：</strong>{html.escape(repair_focus)}</div>
+    </div>
+    """
+    st.markdown(markup, unsafe_allow_html=True)
 
-if selected_case:
+
+def build_highlighted_diff_html(source_text: str, target_text: str, mode: str) -> str:
+    source_tokens = re.findall(r"\S+|\s+", source_text)
+    target_tokens = re.findall(r"\S+|\s+", target_text)
+    matcher = difflib.SequenceMatcher(a=source_tokens, b=target_tokens)
+    parts: List[str] = []
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if mode == "source":
+            snippet = "".join(source_tokens[i1:i2])
+            highlight = tag in {"replace", "delete"}
+            css_class = "diff-removed"
+        else:
+            snippet = "".join(target_tokens[j1:j2])
+            highlight = tag in {"replace", "insert"}
+            css_class = "diff-added"
+
+        if not snippet:
+            continue
+        escaped = html.escape(snippet)
+        parts.append(f'<span class="{css_class}">{escaped}</span>' if highlight else escaped)
+
+    return "".join(parts) or html.escape(source_text if mode == "source" else target_text)
+
+
+def render_action_pills(action_type_counts: Dict[str, int]) -> None:
+    if not action_type_counts:
+        return
+    pill_html = "".join(
+        f'<span class="action-pill">{html.escape(op)} x {count}</span>'
+        for op, count in action_type_counts.items()
+    )
+    st.markdown(pill_html, unsafe_allow_html=True)
+
+
+def render_delta_summary(actions: List[Dict[str, Any]]) -> None:
+    if not actions:
+        st.markdown(
+            """
+            <div class="delta-board">
+              <div class="delta-title">变更点</div>
+              <div class="delta-snippet">这个案例没有专家修改，AI 输出与最终版本一致。</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    label_map = {
+        "edit": "替换",
+        "delete": "删除",
+        "add": "新增",
+        "star": "重点标注",
+    }
+    item_html: List[str] = []
+    for index, action in enumerate(actions, start=1):
+        op = str(action.get("op", "") or "")
+        before_text = str(action.get("selected_text", "") or "")
+        after_text = str(action.get("replacement_text", "") or "")
+        blocks = [
+            f'<div class="delta-op">{index}. {html.escape(label_map.get(op, op or "变更"))}</div>'
+        ]
+        if before_text:
+            blocks.append(
+                f'<div class="delta-snippet delta-before"><strong>原文：</strong>{html.escape(before_text)}</div>'
+            )
+        if op != "delete" and after_text:
+            blocks.append(
+                f'<div class="delta-snippet delta-after"><strong>修改后：</strong>{html.escape(after_text)}</div>'
+            )
+        if op == "delete":
+            blocks.append(
+                '<div class="delta-snippet delta-after"><strong>修改后：</strong>这段内容被移除。</div>'
+            )
+        if op == "star":
+            blocks.append(
+                '<div class="delta-snippet delta-after"><strong>说明：</strong>这段被专家标为重点，正文未改写。</div>'
+            )
+        item_html.append(f'<div class="delta-item">{"".join(blocks)}</div>')
+
+    st.markdown(
+        f"""
+        <div class="delta-board">
+          <div class="delta-title">变更点</div>
+          {''.join(item_html)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_gallery_case(record: Dict[str, Any], index: int) -> None:
+    saved_label = record["saved_at_dt"].strftime("%Y-%m-%d %H:%M") if record["saved_at_dt"] != datetime.min else "未知"
+    header_html = f"""
+    <div class="gallery-title">{index}. {html.escape(str(record.get('person_id', '未命名人物')))}</div>
+    <div class="gallery-subtitle">{html.escape(str(record.get('question', '') or '未填写问题'))}</div>
+    <div class="case-meta">
+      {render_status_chip(str(record.get("review_status", "")))}
+      <span class="status-chip status-other">{html.escape(str(record.get('task_label', '未分类')))}</span>
+      <span class="status-chip status-other">保存于 {html.escape(saved_label)}</span>
+    </div>
+    <div class="case-meta">
+      case_id = <code>{html.escape(str(record.get("case_id", "")))}</code> |
+      版本 = <code>{html.escape(str(record.get("instruction_version") or "未设置"))}</code> /
+      <code>{html.escape(str(record.get("master_prompt_version") or "未设置"))}</code>
+    </div>
+    """
+
+    with st.container(border=True):
+        st.markdown(header_html, unsafe_allow_html=True)
+        render_action_pills(record.get("action_type_counts", {}))
+
+        top_left, top_right = st.columns([0.82, 1.18], gap="large")
+        with top_left:
+            render_person_card(record.get("person", {}))
+            if record.get("reference_images"):
+                with st.expander(f"查看参考图 ({len(record['reference_images'])})", expanded=False):
+                    render_image_grid("参考图", record["reference_images"])
+
+        with top_right:
+            if record.get("task_images"):
+                render_image_grid("任务图", record["task_images"])
+            else:
+                st.info("这个案例没有可回放的任务图。")
+
+        render_delta_summary(record.get("actions", []))
+
+        raw_html = build_highlighted_diff_html(record.get("raw_output", ""), record.get("final_output", ""), "source")
+        st.markdown(
+            f"""
+            <div class="compare-panel">
+              <div class="compare-label">AI 原输出</div>
+              <div class="compare-text">{raw_html}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        final_html = build_highlighted_diff_html(record.get("raw_output", ""), record.get("final_output", ""), "target")
+        st.markdown(
+            f"""
+            <div class="compare-panel">
+              <div class="compare-label">专家修改后</div>
+              <div class="compare-text">{final_html}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if record.get("actions"):
+            with st.expander(f"查看修改动作明细 ({len(record['actions'])})", expanded=False):
+                for patch_index, patch in enumerate(record["actions"], start=1):
+                    render_patch_summary(patch, patch_index)
+
+        extra_col1, extra_col2 = st.columns(2)
+        with extra_col1:
+            with st.expander("查看本次 Prompt", expanded=False):
+                st.code(record.get("final_prompt", "") or "无", language=None)
+        with extra_col2:
+            with st.expander("查看本次 Instructions", expanded=False):
+                st.code(record.get("request_instructions", "") or "无", language=None)
+
+
+def render_review_gallery_tab() -> None:
+    records = load_review_gallery_records()
+
+    st.markdown(
+        """
+        <div class="gallery-hero">
+          <div class="gallery-kicker">Review Showcase</div>
+          <div class="gallery-title">已审校案例对比展厅</div>
+          <div class="gallery-subtitle">
+            把所有 review 过的案例集中展示，左侧看人物卡与任务图，右侧直接并排比较 AI 原输出和专家修改后的输出。
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not records:
+        st.info("还没有已保存的 review 结果。先在“专家审校”里保存一些案例。")
+        return
+
+    total_count = len(records)
+    edited_count = sum(1 for item in records if item.get("review_status") == "edited")
+    pass_count = sum(1 for item in records if item.get("review_status") == "pass")
+    people_count = len({item.get("person_id") for item in records if item.get("person_id")})
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("已审校案例", total_count)
+    metric_cols[1].metric("有专家改动", edited_count)
+    metric_cols[2].metric("直接通过", pass_count)
+    metric_cols[3].metric("涉及人物", people_count)
+
+    all_people = sorted({str(item.get("person_id", "")) for item in records if item.get("person_id")})
+    all_statuses = sorted({str(item.get("review_status", "")) for item in records if item.get("review_status")})
+    task_type_options = ["全部"] + sorted(
+        {str(item.get("task_type", "")) for item in records if item.get("task_type")}
+    )
+
+    filter_col1, filter_col2, filter_col3 = st.columns([1.1, 0.9, 1.0])
+    with filter_col1:
+        keyword = st.text_input(
+            "搜索人物 / 问题 / 输出",
+            placeholder="例如：韩森森、裤子、适合",
+            key="gallery_keyword",
+        ).strip()
+    with filter_col2:
+        selected_people = st.multiselect(
+            "筛选人物",
+            all_people,
+            default=[],
+            key="gallery_people_filter",
+        )
+    with filter_col3:
+        selected_statuses = st.multiselect(
+            "筛选状态",
+            all_statuses,
+            default=all_statuses,
+            key="gallery_status_filter",
+        )
+
+    option_col1, option_col2, option_col3 = st.columns([0.9, 0.8, 0.8])
+    with option_col1:
+        selected_task_type = st.selectbox(
+            "任务类型",
+            task_type_options,
+            index=0,
+            key="gallery_task_type_filter",
+        )
+    with option_col2:
+        page_size = st.selectbox(
+            "每页展示",
+            [4, 6, 8, 10],
+            index=1,
+            key="gallery_page_size",
+        )
+    with option_col3:
+        latest_only = st.checkbox("每个 case 只看最新一次", value=True, key="gallery_latest_only")
+
+    filtered_records = records
+    if latest_only:
+        latest_map: Dict[str, Dict[str, Any]] = {}
+        for item in filtered_records:
+            case_id = str(item.get("case_id", ""))
+            if case_id not in latest_map:
+                latest_map[case_id] = item
+        filtered_records = list(latest_map.values())
+
+    if selected_people:
+        filtered_records = [item for item in filtered_records if item.get("person_id") in selected_people]
+
+    if selected_statuses:
+        filtered_records = [item for item in filtered_records if item.get("review_status") in selected_statuses]
+
+    if selected_task_type != "全部":
+        filtered_records = [item for item in filtered_records if item.get("task_type") == selected_task_type]
+
+    if keyword:
+        lowered = keyword.lower()
+        filtered_records = [
+            item
+            for item in filtered_records
+            if lowered in str(item.get("person_id", "")).lower()
+            or lowered in str(item.get("question", "")).lower()
+            or lowered in str(item.get("raw_output", "")).lower()
+            or lowered in str(item.get("final_output", "")).lower()
+        ]
+
+    filtered_records.sort(key=lambda item: item["saved_at_dt"], reverse=True)
+
+    if not filtered_records:
+        st.warning("当前筛选条件下没有案例。")
+        return
+
+    page_count = max(1, math.ceil(len(filtered_records) / page_size))
+    page = st.number_input(
+        "页码",
+        min_value=1,
+        max_value=page_count,
+        value=1,
+        step=1,
+        key="gallery_page",
+    )
+
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    visible_records = filtered_records[start_index:end_index]
+
+    st.caption(f"当前展示 {len(visible_records)} / {len(filtered_records)} 个案例，第 {page} / {page_count} 页。")
+
+    for index, record in enumerate(visible_records, start=start_index + 1):
+        render_gallery_case(hydrate_review_gallery_record(record), index)
+
+
+def render_review_workbench_tab() -> None:
+    st.subheader("专家审校")
+    st.caption("从已保存日志中选择一个 case，然后直接在模型输出里选中错的片段做 Delete / Edit / Star。")
+
+    saved_logs = list_saved_case_logs()
+    selected_case: Optional[Dict[str, Any]] = None
+
+    if saved_logs:
+        log_options = {path.name: str(path.resolve()) for path in saved_logs}
+        log_labels = list(log_options.keys())
+        if (
+            not st.session_state.review_selected_saved_case
+            or st.session_state.review_selected_saved_case not in log_options
+        ):
+            st.session_state.review_selected_saved_case = log_labels[0]
+
+        st.selectbox(
+            "选择已保存日志",
+            log_labels,
+            index=log_labels.index(st.session_state.review_selected_saved_case),
+            key="review_selected_saved_case",
+        )
+        selected_case = load_case_record_from_log(log_options[st.session_state.review_selected_saved_case])
+    else:
+        st.info("还没有找到已保存的测试日志。请先在 `test_openai_api_personal.py` 里跑测试。")
+
+    if not selected_case:
+        return
+
     render_version_badge(
         selected_case.get("instruction_version"),
         selected_case.get("master_prompt_version"),
@@ -1292,6 +1937,41 @@ if selected_case:
             mime="text/plain",
             use_container_width=True,
         )
+
+
+init_session_state()
+
+st.set_page_config(page_title=APP_TITLE, layout="wide")
+inject_app_styles()
+st.title(APP_TITLE)
+st.caption("现在包含两个入口：一个继续做专家审校，一个把已 review 案例集中做人物卡 + 图片 + 输出对比展示。")
+
+with st.sidebar:
+    st.markdown("### 审校设置")
+    st.text_input(
+        "reviewer_id",
+        placeholder="例如：expert_a",
+        key="reviewer_id",
+    )
+
+    st.divider()
+    st.markdown("### 环境状态")
+    st.write(
+        {
+            "logs_dir": str(LOG_DIR.resolve()),
+            "review_logs_dir": str(REVIEW_DIR.resolve()),
+            "saved_case_count": len(list_saved_case_logs(limit=1000)),
+            "review_case_count": len(load_review_gallery_records()),
+        }
+    )
+
+tab_gallery, tab_review = st.tabs(["案例对比展厅", "专家审校"])
+
+with tab_gallery:
+    render_review_gallery_tab()
+
+with tab_review:
+    render_review_workbench_tab()
 
 st.divider()
 
