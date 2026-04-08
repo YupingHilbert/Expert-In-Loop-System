@@ -1255,7 +1255,7 @@ def inject_app_styles() -> None:
         .compare-text {
             color: var(--ink);
             font-size: 0.96rem;
-            line-height: 1.78;
+            line-height: 1.52;
             white-space: pre-wrap;
             word-break: break-word;
         }
@@ -1479,9 +1479,19 @@ def render_person_card(person: Dict[str, Any]) -> None:
     st.markdown(markup, unsafe_allow_html=True)
 
 
+def compact_display_text(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"[ \t]+\n", "\n", normalized)
+    normalized = re.sub(r"\n[ \t]+\n", "\n", normalized)
+    normalized = re.sub(r"\n{2,}", "\n", normalized)
+    return normalized.strip()
+
+
 def build_highlighted_diff_html(source_text: str, target_text: str, mode: str) -> str:
-    source_tokens = re.findall(r"\S+|\s+", source_text)
-    target_tokens = re.findall(r"\S+|\s+", target_text)
+    compact_source = compact_display_text(source_text)
+    compact_target = compact_display_text(target_text)
+    source_tokens = re.findall(r"\S+|\s+", compact_source)
+    target_tokens = re.findall(r"\S+|\s+", compact_target)
     matcher = difflib.SequenceMatcher(a=source_tokens, b=target_tokens)
     parts: List[str] = []
 
@@ -1500,7 +1510,8 @@ def build_highlighted_diff_html(source_text: str, target_text: str, mode: str) -
         escaped = html.escape(snippet)
         parts.append(f'<span class="{css_class}">{escaped}</span>' if highlight else escaped)
 
-    return "".join(parts) or html.escape(source_text if mode == "source" else target_text)
+    fallback_text = compact_source if mode == "source" else compact_target
+    return "".join(parts) or html.escape(fallback_text)
 
 
 def render_action_pills(action_type_counts: Dict[str, int]) -> None:
@@ -1542,11 +1553,11 @@ def render_delta_summary(actions: List[Dict[str, Any]]) -> None:
         ]
         if before_text:
             blocks.append(
-                f'<div class="delta-snippet delta-before"><strong>原文：</strong>{html.escape(before_text)}</div>'
+                f'<div class="delta-snippet delta-before"><strong>原文：</strong>{html.escape(compact_display_text(before_text))}</div>'
             )
         if op != "delete" and after_text:
             blocks.append(
-                f'<div class="delta-snippet delta-after"><strong>修改后：</strong>{html.escape(after_text)}</div>'
+                f'<div class="delta-snippet delta-after"><strong>修改后：</strong>{html.escape(compact_display_text(after_text))}</div>'
             )
         if op == "delete":
             blocks.append(

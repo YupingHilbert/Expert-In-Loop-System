@@ -38,7 +38,7 @@
       border: 1px solid var(--border);
       border-radius: 18px;
       padding: 18px 18px 24px;
-      line-height: 1.75;
+      line-height: 1.45;
       font-size: 15px;
       min-height: 320px;
       box-sizing: border-box;
@@ -163,6 +163,8 @@
     const replacementInput = document.getElementById("replacementInput");
 
     let currentText = "";
+    let displayText = "";
+    let displayToRawIndex = [];
     let currentSelection = null;
     let inputMode = "edit";
 
@@ -218,12 +220,58 @@
       const preRange = range.cloneRange();
       preRange.selectNodeContents(root);
       preRange.setEnd(range.startContainer, range.startOffset);
-      const start = preRange.toString().length;
-      const selectedText = range.toString();
+      const displayStart = preRange.toString().length;
+      const selectedDisplayText = range.toString();
+      const displayEnd = displayStart + selectedDisplayText.length;
+      const start = mapDisplayIndexToRaw(displayStart);
+      const end = mapDisplayIndexToRaw(displayEnd);
+      const selectedText = currentText.slice(start, end);
       return {
         start,
-        end: start + selectedText.length,
+        end,
         selectedText
+      };
+    }
+
+    function mapDisplayIndexToRaw(displayIndex) {
+      if (!displayToRawIndex.length) {
+        return displayIndex;
+      }
+      if (displayIndex <= 0) {
+        return 0;
+      }
+      if (displayIndex >= displayToRawIndex.length) {
+        return currentText.length;
+      }
+      return displayToRawIndex[displayIndex];
+    }
+
+    function buildCompactDisplay(rawText) {
+      const normalized = (rawText || "").replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+      const compactChars = [];
+      const indexMap = [0];
+      let rawIndex = 0;
+
+      while (rawIndex < normalized.length) {
+        const char = normalized[rawIndex];
+        if (char === "\n") {
+          let runStart = rawIndex;
+          while (rawIndex < normalized.length && normalized[rawIndex] === "\n") {
+            rawIndex += 1;
+          }
+          compactChars.push("\n");
+          indexMap.push(runStart + 1);
+          continue;
+        }
+
+        compactChars.push(char);
+        rawIndex += 1;
+        indexMap.push(rawIndex);
+      }
+
+      return {
+        display: compactChars.join(""),
+        map: indexMap
       };
     }
 
@@ -345,7 +393,10 @@
       }
       const args = message.args || {};
       currentText = args.text || "";
-      content.textContent = currentText;
+      const compactResult = buildCompactDisplay(currentText);
+      displayText = compactResult.display;
+      displayToRawIndex = compactResult.map;
+      content.textContent = displayText;
       hideToolbar();
       setFrameHeight();
     });
